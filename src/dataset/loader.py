@@ -27,6 +27,8 @@ class MIMICCXRDataset(Dataset):
         test_size: float = 0.1,
         random_state: int = 42,
         transform: Optional[Callable] = None,
+        image_col: str = "image_path",
+        text_col: str = "text",
     ) -> None:
         """
         Initialize dataset with CSV of image paths and reports.
@@ -39,14 +41,28 @@ class MIMICCXRDataset(Dataset):
             test_size: Fraction of data for test.
             random_state: Random seed for reproducibility.
             transform: Optional torchvision transform applied to PIL images.
+            image_col: Name of the CSV column containing image paths.
+            text_col: Name of the CSV column containing report text.
         """
         assert split in ("train", "val", "test"), f"Invalid split: {split}"
         self.image_root = Path(image_root)
         self.transform = transform
 
         df = pd.read_csv(csv_path)
-        assert "image_path" in df.columns and "text" in df.columns, \
-            "CSV must contain 'image_path' and 'text' columns"
+
+        # Auto-detect columns if defaults not found
+        if image_col not in df.columns or text_col not in df.columns:
+            img_candidates = ["image_path", "path", "filepath", "file_path", "img_path"]
+            txt_candidates = ["text", "report", "findings", "impression", "radiology_report"]
+            image_col = next((c for c in img_candidates if c in df.columns), image_col)
+            text_col = next((c for c in txt_candidates if c in df.columns), text_col)
+
+        assert image_col in df.columns, \
+            f"Image column '{image_col}' not found. Available: {list(df.columns)}"
+        assert text_col in df.columns, \
+            f"Text column '{text_col}' not found. Available: {list(df.columns)}"
+
+        df = df.rename(columns={image_col: "image_path", text_col: "text"})
 
         # First carve out test set
         train_val, test = train_test_split(
